@@ -1,0 +1,17 @@
+[Unit]
+Description=OpenClaw AI Agent Server
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openclaw
+WorkingDirectory=/opt/openclaw
+# Use the venv built during first-boot; fall back to system python3.
+ExecStart=/bin/sh -c 'exec "$( [ -x /opt/openclaw/.venv/bin/python ] && echo /opt/openclaw/.venv/bin/python || echo /usr/bin/python3 )" /opt/openclaw/src/main.py'
+Environment=PYTHONUNBUFFERED=1
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

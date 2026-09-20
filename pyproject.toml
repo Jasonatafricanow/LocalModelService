@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openclaw-cs"
+version = "1.0.0"
+description = "基于 Ollama 本地模型的智能 Agent 客服服务"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110,<1",
+    "uvicorn>=0.29,<1",
+    "langchain>=1.0,<2",
+    "langchain-ollama>=1.0,<2",
+    "langchain-core>=1.0,<2",
+    "pydantic>=2.5,<3",
+    "requests>=2.31,<3",
+    "langgraph>=1.2,<3",
+]
+[project.optional-dependencies]
+test = [
+    "pytest>=8",
+    "httpx>=0.28",
+]
+
+[project.urls]
+Homepage = "https://github.com/Jasonatafricanow/LocalModelService"
+
+[project.scripts]
+openclaw = "src.main:main"
+openclaw-install = "install:main"
+
+[tool.setuptools.packages.find]
+include = ["src*", "modules*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

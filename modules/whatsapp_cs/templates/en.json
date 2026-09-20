@@ -1,0 +1,13 @@
+{
+  "greeting": "Hello! Welcome to LojaTech support. How can I help you today?",
+  "stock_check_result": "📦 Product **{{product}}** is **{{status}}**.\n{{details}}",
+  "order_confirmation": "✅ Order **#{{order_id}}** confirmed successfully!\n{{details}}",
+  "order_status": "📋 Order **#{{order_id}}**: **{{status}}**\n{{details}}",
+  "return_request": "We have received your return request. {{details}}",
+  "complaint": "We are sorry about that. {{details}}",
+  "goodbye": "Thank you for reaching out! Have a great day! 😊",
+  "unknown": "Sorry, I did not quite understand that. Could you rephrase your message so I can help you better?",
+  "need_more_info": "To better assist you, could you provide more information? {{details}}",
+  "error": "Sorry, an error occurred while processing your request. Please try again later.",
+  "vision_analysis": "📸 I received your image! Here is what I found:\n\nProduct: {{product}}\nQuantity: {{quantity}}\nSerial numbers: {{serial_numbers}}"
+}

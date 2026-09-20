@@ -1,0 +1,18 @@
+[Unit]
+Description=OpenClaw first-boot setup (GPU drivers + Ollama + models + config)
+# Only run until it has marked itself complete.
+ConditionPathExists=!/var/lib/openclaw/.firstboot-done
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/openclaw/bootusb/firstboot/firstboot.sh
+# The script may reboot mid-way (after driver install); RemainAfterExit keeps
+# state sane across the oneshot lifecycle.
+RemainAfterExit=yes
+TimeoutStartSec=0
+StandardOutput=journal+console
+
+[Install]
+WantedBy=multi-user.target

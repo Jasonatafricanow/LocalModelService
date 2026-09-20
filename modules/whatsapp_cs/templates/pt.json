@@ -1,0 +1,13 @@
+{
+  "greeting": "Olá! Bem-vindo ao atendimento da LojaTech. Como posso ajudar você hoje?",
+  "stock_check_result": "📦 O produto **{{product}}** está **{{status}}**.\n{{details}}",
+  "order_confirmation": "✅ Pedido **#{{order_id}}** confirmado com sucesso!\n{{details}}",
+  "order_status": "📋 Pedido **#{{order_id}}**: **{{status}}**\n{{details}}",
+  "return_request": "Recebemos sua solicitação de devolução. {{details}}",
+  "complaint": "Lamentamos pelo ocorrido. {{details}}",
+  "goodbye": "Obrigado pelo contato! Tenha um ótimo dia! 😊",
+  "unknown": "Desculpe, não entendi completamente. Pode reformular sua mensagem para que eu possa ajudar melhor?",
+  "need_more_info": "Para melhor atendê-lo, poderia fornecer mais informações? {{details}}",
+  "error": "Desculpe, ocorreu um erro ao processar sua solicitação. Tente novamente mais tarde.",
+  "vision_analysis": "📸 Recebi sua imagem! Analisei o seguinte:\n\nProduto: {{product}}\nQuantidade: {{quantity}}\nNúmeros de série: {{serial_numbers}}"
+}

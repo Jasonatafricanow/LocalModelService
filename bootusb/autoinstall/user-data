@@ -1,0 +1,65 @@
+#cloud-config
+# ============================================================================
+# OpenClaw 无人值守安装应答文件 (Ubuntu 24.04 Server autoinstall / subiquity)
+#
+# 会自动：设置区域/键盘 -> DHCP 联网 -> 清盘装 Ubuntu -> 建用户 ->
+#         安装基础软件包 -> 把光盘里的 OpenClaw 拷进 /opt/openclaw ->
+#         启用“首次开机”服务（重启后自动装驱动/Ollama/模型并起服务）。
+#
+# ⚠️  storage 段会“清空目标机最大的那块硬盘”，属于破坏性操作。
+# ⚠️  默认账号 openclaw / 密码 openclaw —— 部署后请立刻改密码！
+#      改密码哈希： openssl passwd -6   或   mkpasswd -m sha-512
+# ============================================================================
+autoinstall:
+  version: 1
+  # 不留任何交互环节，全自动
+  interactive-sections: []
+
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+
+  # 安装期间不联网刷新安装器，避免卡住 / 不确定性
+  refresh-installer:
+    update: false
+
+  ssh:
+    install-server: true
+    allow-pw: true
+
+  # 目标磁盘：自动选“最大”的一块整盘直装（会清盘）。
+  # 只有一块盘时最省心；多盘时选最大的那块。
+  storage:
+    layout:
+      name: direct
+      match:
+        size: largest
+
+  identity:
+    hostname: openclaw
+    realname: OpenClaw Appliance
+    username: openclaw
+    # 密码明文为 "openclaw"（SHA-512）。务必部署后修改。
+    password: "$6$eNtsghr59wk6bekB$R/z0zp1YjgRFIw98edSwNFmexin.TkGtuogtUGmcNS07QYVQ06JUISE3XHKERhh5hAbdp1EaT2N2FCbZhbgFP0"
+
+  # 系统装好后要用到的基础包（Ollama / 模型走首次开机联网安装）
+  packages:
+    - git
+    - curl
+    - ca-certificates
+    - python3
+    - python3-pip
+    - python3-venv
+    - build-essential
+    - pciutils
+
+  # 安装器阶段执行：目标系统挂在 /target，安装介质在 /cdrom
+  late-commands:
+    # 1) 把 OpenClaw 项目从光盘拷进目标系统
+    - mkdir -p /target/opt/openclaw
+    - cp -a /cdrom/openclaw/. /target/opt/openclaw/
+    # 2) 装入 systemd 单元并启用首次开机服务
+    - cp /target/opt/openclaw/bootusb/firstboot/openclaw-firstboot.service /target/etc/systemd/system/
+    - cp /target/opt/openclaw/bootusb/firstboot/openclaw.service /target/etc/systemd/system/
+    - chmod +x /target/opt/openclaw/bootusb/firstboot/firstboot.sh
+    - curtin in-target --target=/target -- systemctl enable openclaw-firstboot.service

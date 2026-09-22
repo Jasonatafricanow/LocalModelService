@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -40,12 +42,14 @@ class ToolRegistry:
     def get(self, name: str) -> BaseTool | None:
         return self._tools.get(name)
 
-    def list(self) -> list[dict[str, Any]]:
+    def list_tools(self) -> list[dict[str, Any]]:
         return [
             {
                 "name": t.name,
                 "description": t.description,
-                "args_schema": t.args_schema.model_json_schema() if t.args_schema else None,
+                "args_schema": (
+                    t.args_schema.model_json_schema() if t.args_schema else None
+                ),
             }
             for t in self._tools.values()
         ]
@@ -53,6 +57,10 @@ class ToolRegistry:
     def to_langchain_tools(self) -> list[LangChainTool]:
         return [t._to_langchain() for t in self._tools.values()]
 
+    # Temporary compatibility for existing callers. Keep this last so it can
+    # never shadow the builtin list in later annotations.
+    def list(self) -> list[dict[str, Any]]:
+        return self.list_tools()
 
-# 全局单例
+
 registry = ToolRegistry()

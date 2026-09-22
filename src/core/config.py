@@ -31,4 +31,4 @@ def get_agent_config(config: dict | None = None) -> dict:
 
 def get_server_config(config: dict | None = None) -> dict:
     cfg = config or load_config()
-    return cfg.get("server", {"host": "0.0.0.0", "port": 5000})
+    return cfg.get("server", {"host": "127.0.0.1", "port": 5000})

@@ -78,7 +78,7 @@ async def root():
         "name": "OpenClaw",
         "version": "1.0.0",
         "model": llm_cfg.get("model"),
-        "tools_count": len(registry.list()),
+        "tools_count": len(registry.list_tools()),
         "status": "running",
     }
 

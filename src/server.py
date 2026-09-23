@@ -72,13 +72,9 @@ app = FastAPI(
 
 @app.get("/")
 async def root():
-    cfg = load_config()
-    llm_cfg = cfg.get("llm", {})
     return {
         "name": "OpenClaw",
         "version": "1.0.0",
-        "model": llm_cfg.get("model"),
-        "tools_count": len(registry.list()),
         "status": "running",
     }
 

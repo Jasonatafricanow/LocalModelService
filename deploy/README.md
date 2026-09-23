@@ -1,3 +1,28 @@
+
+## API authentication
+
+The HTTPS reverse proxy does not replace application authentication.
+
+Before exposing the service through the VPS tunnel, configure on the machine
+running OpenClaw:
+
+```bash
+export OPENCLAW_API_KEY="<random-long-secret>"
+export OPENCLAW_TOOLS_API_KEY="<different-random-long-secret>"  # only if needed
+```
+
+Private chat/model/session endpoints require:
+
+```http
+Authorization: Bearer <OPENCLAW_API_KEY>
+```
+
+Direct tool listing/invocation requires the separate tools key.
+
+OpenClaw listens on `127.0.0.1` by default. A non-loopback bind is rejected
+unless `OPENCLAW_API_KEY` is configured. Keep the application on loopback
+when using the SSH reverse-tunnel deployment.
+
 # OpenClaw 跨境部署方案
 
 ```

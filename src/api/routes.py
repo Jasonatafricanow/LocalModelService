@@ -5,18 +5,19 @@ import time
 import uuid
 
 import requests
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from src.core.config import get_llm_config
 from src.agent.agent import get_agent
-from src.tools.registry import registry
-from src.memory.manager import ConversationMemory
-from src.api.schemas import (
-    ChatRequest,
-    ChatCompletionRequest,
-    ToolInvokeRequest,
+from src.api.auth import (
+    ApiPrincipal,
+    require_api_principal,
+    require_tools_principal,
 )
+from src.api.schemas import ChatCompletionRequest, ChatRequest, ToolInvokeRequest
+from src.core.config import get_llm_config
+from src.memory.manager import ConversationMemory
+from src.tools.registry import registry
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -25,10 +26,7 @@ memory = ConversationMemory()
 
 @router.get("/health")
 async def health():
-    """Lightweight health check — verifies Ollama is reachable via /api/tags.
-
-    (Does not run a full inference so the endpoint stays cheap.)
-    """
+    """Cheap public health check."""
     llm_cfg = get_llm_config()
     base_url = llm_cfg.get("base_url", "http://localhost:11434")
     try:
@@ -42,11 +40,17 @@ async def health():
             "ollama": "connected" if connected else "disconnected",
         }
     except Exception as e:
-        return {"status": "degraded", "ollama": "disconnected", "error": str(e)}
+        return {
+            "status": "degraded",
+            "ollama": "disconnected",
+            "error": str(e),
+        }
 
 
 @router.get("/models")
-async def list_models():
+async def list_models(
+    _principal: ApiPrincipal = Depends(require_api_principal),
+):
     llm_cfg = get_llm_config()
     base_url = llm_cfg.get("base_url", "http://localhost:11434")
     try:
@@ -61,17 +65,20 @@ async def list_models():
 
 
 @router.post("/chat")
-async def chat(req: ChatRequest):
+async def chat(
+    req: ChatRequest,
+    principal: ApiPrincipal = Depends(require_api_principal),
+):
     agent = get_agent()
-    history = memory.get_history(req.session_id)
+    history = memory.get_history(principal.owner_id, req.session_id)
     try:
         reply = await agent.achat(req.message, history)
     except Exception as e:
         logger.exception("Chat error")
         raise HTTPException(status_code=500, detail=str(e))
 
-    memory.add_message(req.session_id, "user", req.message)
-    memory.add_message(req.session_id, "assistant", reply)
+    memory.add_message(principal.owner_id, req.session_id, "user", req.message)
+    memory.add_message(principal.owner_id, req.session_id, "assistant", reply)
 
     return {
         "status": "ok",
@@ -82,37 +89,48 @@ async def chat(req: ChatRequest):
 
 
 @router.post("/chat/stream")
-async def chat_stream(req: ChatRequest):
+async def chat_stream(
+    req: ChatRequest,
+    principal: ApiPrincipal = Depends(require_api_principal),
+):
     agent = get_agent()
-    history = memory.get_history(req.session_id)
-    llm_cfg = get_llm_config()
+    history = memory.get_history(principal.owner_id, req.session_id)
 
     async def generate():
         full = ""
         async for chunk in agent.astream(req.message, history):
             if chunk:
                 full += chunk
-                yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
+                yield (
+                    "data: "
+                    + json.dumps({"content": chunk}, ensure_ascii=False)
+                    + "\n\n"
+                )
         yield "data: [DONE]\n\n"
 
-        memory.add_message(req.session_id, "user", req.message)
-        memory.add_message(req.session_id, "assistant", full)
+        memory.add_message(
+            principal.owner_id, req.session_id, "user", req.message
+        )
+        memory.add_message(
+            principal.owner_id, req.session_id, "assistant", full
+        )
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @router.post("/v1/chat/completions")
-async def chat_completions(req: ChatCompletionRequest):
+async def chat_completions(
+    req: ChatCompletionRequest,
+    _principal: ApiPrincipal = Depends(require_api_principal),
+):
     agent = get_agent()
 
-    # 提取最后一条 user 消息
     user_msg = ""
     for m in reversed(req.messages):
         if m.role == "user":
             user_msg = m.content
             break
 
-    # 将历史消息转为记忆格式
     history = []
     for m in req.messages[:-1]:
         if m.role in ("user", "assistant"):
@@ -122,8 +140,18 @@ async def chat_completions(req: ChatCompletionRequest):
         async def generate():
             async for chunk in agent.astream(user_msg, history):
                 if chunk:
-                    yield f"data: {json.dumps({'choices': [{'delta': {'content': chunk}, 'index': 0}]}, ensure_ascii=False)}\n\n"
+                    payload = {
+                        "choices": [
+                            {"delta": {"content": chunk}, "index": 0}
+                        ]
+                    }
+                    yield (
+                        "data: "
+                        + json.dumps(payload, ensure_ascii=False)
+                        + "\n\n"
+                    )
             yield "data: [DONE]\n\n"
+
         return StreamingResponse(generate(), media_type="text/event-stream")
 
     reply = await agent.achat(user_msg, history)
@@ -138,18 +166,29 @@ async def chat_completions(req: ChatCompletionRequest):
                 "finish_reason": "stop",
             }
         ],
-        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        },
         "created": int(time.time()),
     }
 
 
 @router.get("/tools")
-async def list_tools():
-    return {"tools": registry.list(), "count": len(registry.list())}
+async def list_tools(
+    _principal: ApiPrincipal = Depends(require_tools_principal),
+):
+    tools = registry.list_tools()
+    return {"tools": tools, "count": len(tools)}
 
 
 @router.post("/tools/{name}/invoke")
-async def invoke_tool(name: str, req: ToolInvokeRequest):
+async def invoke_tool(
+    name: str,
+    req: ToolInvokeRequest,
+    _principal: ApiPrincipal = Depends(require_tools_principal),
+):
     tool = registry.get(name)
     if not tool:
         raise HTTPException(status_code=404, detail=f"Tool '{name}' not found")
@@ -161,13 +200,19 @@ async def invoke_tool(name: str, req: ToolInvokeRequest):
 
 
 @router.get("/sessions")
-async def list_sessions():
-    return {"sessions": memory.list_sessions(), "count": len(memory.list_sessions())}
+async def list_sessions(
+    principal: ApiPrincipal = Depends(require_api_principal),
+):
+    sessions = memory.list_sessions(principal.owner_id)
+    return {"sessions": sessions, "count": len(sessions)}
 
 
 @router.delete("/sessions/{session_id}")
-async def clear_session(session_id: str):
-    memory.clear(session_id)
+async def clear_session(
+    session_id: str,
+    principal: ApiPrincipal = Depends(require_api_principal),
+):
+    memory.clear(principal.owner_id, session_id)
     return {"status": "ok", "session_id": session_id}
 
 
@@ -177,11 +222,6 @@ async def clear_session(session_id: str):
     include_in_schema=False,
 )
 async def friendly_404(full_path: str, request: Request):
-    """Catch-all returning a friendly JSON 404 for any unmatched path.
-
-    Registered at the end of the router so it never shadows the real API
-    routes declared above it.
-    """
     return JSONResponse(
         status_code=404,
         content={

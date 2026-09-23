@@ -7,6 +7,13 @@ Run with::
 Note: Tests that require Ollama (e.g. /chat) are skipped automatically.
 """
 from pathlib import Path
+import os
+
+os.environ.setdefault("OPENCLAW_API_KEY", "test-api-key")
+os.environ.setdefault("OPENCLAW_TOOLS_API_KEY", "test-tools-key")
+
+API_HEADERS = {"Authorization": "Bearer test-api-key"}
+TOOLS_HEADERS = {"Authorization": "Bearer test-tools-key"}
 
 _root = Path(__file__).resolve().parent.parent
 import sys
@@ -55,7 +62,7 @@ class TestRoot:
 
 class TestTools:
     def test_list_tools_returns_list(self):
-        resp = client.get("/tools")
+        resp = client.get("/tools", headers=TOOLS_HEADERS)
         assert resp.status_code == 200
         data = resp.json()
         assert "tools" in data
@@ -67,7 +74,7 @@ class TestTools:
         assert "get_current_time" in tool_names
 
     def test_tool_has_args_schema(self):
-        resp = client.get("/tools")
+        resp = client.get("/tools", headers=TOOLS_HEADERS)
         data = resp.json()
         for tool in data["tools"]:
             assert "name" in tool
@@ -78,7 +85,7 @@ class TestTools:
 
 class TestSessions:
     def test_list_sessions_empty_initially(self):
-        resp = client.get("/sessions")
+        resp = client.get("/sessions", headers=API_HEADERS)
         assert resp.status_code == 200
         data = resp.json()
         assert "sessions" in data
@@ -86,7 +93,7 @@ class TestSessions:
         assert isinstance(data["sessions"], list)
 
     def test_delete_nonexistent_session(self):
-        resp = client.delete("/sessions/nonexistent_123")
+        resp = client.delete("/sessions/nonexistent_123", headers=API_HEADERS)
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "ok"
@@ -111,28 +118,28 @@ class TestHealth:
 
 class TestChatSchema:
     def test_chat_missing_message_returns_422(self):
-        resp = client.post("/chat", json={"session_id": "test"})
+        resp = client.post("/chat", headers=API_HEADERS, json={"session_id": "test"})
         assert resp.status_code == 422  # Unprocessable Entity
 
     @ollama_required
     def test_chat_empty_message(self):
-        resp = client.post("/chat", json={"message": "", "session_id": "test"})
+        resp = client.post("/chat", headers=API_HEADERS, json={"message": "", "session_id": "test"})
         assert resp.status_code in (200, 422)
 
     @ollama_required
     def test_chat_stream_schema(self):
-        resp = client.post("/chat/stream", json={"message": "hi"})
+        resp = client.post("/chat/stream", headers=API_HEADERS, json={"message": "hi"})
         assert resp.status_code in (200, 422, 502, 503)
 
 
 class TestChatCompletionsSchema:
     def test_completions_missing_messages_returns_422(self):
-        resp = client.post("/v1/chat/completions", json={"model": "test"})
+        resp = client.post("/v1/chat/completions", headers=API_HEADERS, json={"model": "test"})
         assert resp.status_code == 422
 
     @ollama_required
     def test_completions_valid_request(self):
-        resp = client.post("/v1/chat/completions", json={
+        resp = client.post("/v1/chat/completions", headers=API_HEADERS, json={
             "model": "test",
             "messages": [{"role": "user", "content": "hello"}],
         })
@@ -144,12 +151,33 @@ class TestChatCompletionsSchema:
 
 class TestToolInvokeSchema:
     def test_invoke_nonexistent_tool_404(self):
-        resp = client.post("/tools/nonexistent/invoke", json={"arguments": {}})
+        resp = client.post("/tools/nonexistent/invoke", headers=TOOLS_HEADERS, json={"arguments": {}})
         assert resp.status_code == 404
 
     def test_invoke_invalid_args(self):
-        resp = client.post("/tools/get_current_time/invoke", json={"arguments": {"format": "%Y"}})
+        resp = client.post("/tools/get_current_time/invoke", headers=TOOLS_HEADERS, json={"arguments": {"format": "%Y"}})
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "ok"
         assert "result" in data
+
+class TestAuthentication:
+    def test_private_api_rejects_missing_bearer(self):
+        assert client.get("/models").status_code == 401
+        assert client.get("/sessions").status_code == 401
+        assert client.post("/chat", json={"message": "hello"}).status_code == 401
+
+    def test_private_api_rejects_wrong_bearer(self):
+        response = client.get(
+            "/sessions",
+            headers={"Authorization": "Bearer wrong-key"},
+        )
+        assert response.status_code == 401
+
+    def test_standard_api_key_cannot_invoke_tools(self):
+        response = client.get("/tools", headers=API_HEADERS)
+        assert response.status_code == 401
+
+    def test_tools_key_cannot_read_sessions(self):
+        response = client.get("/sessions", headers=TOOLS_HEADERS)
+        assert response.status_code == 401

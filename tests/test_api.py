@@ -164,7 +164,7 @@ class TestToolInvokeSchema:
 class TestAuthentication:
     def test_private_api_rejects_missing_bearer(self):
         assert client.get("/models").status_code == 401
-        assert client.get("/sessions", headers=API_HEADERS).status_code == 401
+        assert client.get("/sessions").status_code == 401
         assert client.post("/chat", json={"message": "hello"}).status_code == 401
 
     def test_private_api_rejects_wrong_bearer(self):

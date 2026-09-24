@@ -56,6 +56,28 @@ Local inference can keep model requests on the Ollama host. That does **not** me
 optional adapter is offline: external business/WhatsApp integrations may transmit data to
 their configured services.
 
+## Bounded completeness
+
+LocalModelService is deliberately a service boundary around local inference, not a second
+model platform.
+
+It owns:
+
+- the application-facing HTTP/OpenAI-compatible surface;
+- local Ollama invocation and streaming adaptation;
+- authenticated access to private API/tool surfaces;
+- owner-partitioned sessions;
+- module/tool registration seams;
+- safe local/public binding behavior.
+
+It does not own distributed scheduling, model training, fleet management, business-domain
+authorization inside downstream applications, or a universal plugin sandbox. Keeping those
+responsibilities outside this repository is part of the boundary: applications can replace
+the inference backend without giving the model service authority over their business state.
+
+Completeness here should be checked against the declared service/security contracts and
+their regressions rather than repository size or the number of infrastructure layers.
+
 ## Verification
 
 GitHub Actions installs the declared dependencies and runs the repository test suite on

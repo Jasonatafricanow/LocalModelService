@@ -10,6 +10,9 @@ WorkingDirectory=/opt/openclaw
 # Use the venv built during first-boot; fall back to system python3.
 ExecStart=/bin/sh -c 'exec "$( [ -x /opt/openclaw/.venv/bin/python ] && echo /opt/openclaw/.venv/bin/python || echo /usr/bin/python3 )" /opt/openclaw/src/main.py'
 Environment=PYTHONUNBUFFERED=1
+# OPENCLAW_API_KEY / OPENCLAW_TOOLS_API_KEY generated at install time
+# (bootusb/firstboot/init-credentials.sh); required for the 0.0.0.0 bind.
+EnvironmentFile=-/etc/openclaw/openclaw.env
 Restart=always
 RestartSec=5
 

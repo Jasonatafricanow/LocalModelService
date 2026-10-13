@@ -17,7 +17,6 @@ anything else.
 >>> field names match YOUR API's JSON. Everything else stays as-is.
 """
 import logging
-import random
 from typing import Any, Optional
 
 from . import store_api
@@ -92,7 +91,28 @@ def _map_order(raw: Any, queried: str) -> dict:
         "estimated_delivery": _pick(rec, "estimated_delivery", "eta", "previsao",
                                     default="—"),
         "total": _pick(rec, "total", "valor_total", "amount"),
+        "phone": _pick(rec, "phone", "customer_phone", "buyer_phone", "telefone",
+                       "celular"),
     }
+
+
+def _digits(value: Any) -> str:
+    return "".join(ch for ch in str(value or "") if ch.isdigit())
+
+
+def _same_phone(a: Any, b: Any) -> bool:
+    """WhatsApp senders arrive as E.164 digits; store records may omit the
+    country code, so compare on the trailing national number."""
+    da, db = _digits(a), _digits(b)
+    if len(da) < 8 or len(db) < 8:
+        return False
+    n = min(len(da), len(db), 11)
+    return da[-n:] == db[-n:]
+
+
+def _not_found(oid: str, status: str = "not_found") -> dict:
+    return {"order_id": oid, "found": False, "status": status,
+            "estimated_delivery": "—", "total": None}
 
 
 def _map_products(raw: Any) -> list[str]:
@@ -148,27 +168,37 @@ def check_stock(product_model: str) -> dict:
     }
 
 
-def get_order_status(order_id: str) -> dict:
+def get_order_status(order_id: str, requester_phone: Optional[str] = None) -> dict:
     """Look up an order's status. Returns:
     {order_id, found, status, estimated_delivery, total}
+
+    Order numbers are short and guessable, so when the caller passes the
+    requester's phone and the record carries one, a mismatch is reported as
+    "not found" — one customer cannot read another customer's order.
     """
     oid = str(order_id).strip()
     if store_api.is_enabled():
         try:
-            return _map_order(store_api.fetch_order(oid), oid)
+            info = _map_order(store_api.fetch_order(oid), oid)
         except Exception as e:  # noqa: BLE001 - graceful degradation
             logger.warning("store_api order lookup failed for %s: %s", oid, e)
-            return {"order_id": oid, "found": False, "status": "unknown",
-                    "estimated_delivery": "—", "total": None}
-
-    # ---- mock fallback ----
-    if oid in MOCK_ORDERS:
+            return _not_found(oid, "unknown")
+    elif oid in MOCK_ORDERS:
         order = MOCK_ORDERS[oid]
-        return {"order_id": oid, "found": True, "status": order["status"],
-                "estimated_delivery": "3-5 business days", "total": order.get("total")}
-    chosen = random.choice(["processing", "shipped", "in_transit", "delivered"])
-    return {"order_id": oid, "found": True, "status": chosen,
-            "estimated_delivery": "3-5 business days", "total": None}
+        customer = order.get("customer") or {}
+        info = {"order_id": oid, "found": True, "status": order["status"],
+                "estimated_delivery": "3-5 business days", "total": order.get("total"),
+                "phone": customer.get("phone") if isinstance(customer, dict) else None}
+    else:
+        # Unknown order: never invent a status for the customer.
+        return _not_found(oid)
+
+    owner_phone = info.pop("phone", None)
+    owned = _same_phone(owner_phone, requester_phone)
+    if requester_phone and owner_phone and not owned:
+        logger.warning("order %s requested by a phone that does not own it", oid)
+        return _not_found(oid)
+    return info
 
 
 def create_order(customer_info: Optional[dict] = None,

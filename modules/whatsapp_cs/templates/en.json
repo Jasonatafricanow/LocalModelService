@@ -3,6 +3,7 @@
   "stock_check_result": "📦 Product **{{product}}** is **{{status}}**.\n{{details}}",
   "order_confirmation": "✅ Order **#{{order_id}}** confirmed successfully!\n{{details}}",
   "order_status": "📋 Order **#{{order_id}}**: **{{status}}**\n{{details}}",
+  "order_not_found": "❓ I couldn't find order **#{{order_id}}** for this number. Please check the order number.",
   "return_request": "We have received your return request. {{details}}",
   "complaint": "We are sorry about that. {{details}}",
   "goodbye": "Thank you for reaching out! Have a great day! 😊",

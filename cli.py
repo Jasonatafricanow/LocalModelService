@@ -12,6 +12,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 import uvicorn
 from src.core.config import load_config, get_server_config
+from src.main import validate_bind_security
 
 
 def main():
@@ -23,8 +24,9 @@ def main():
 
     cfg = load_config()
     server_cfg = get_server_config(cfg)
-    host = args.host or server_cfg.get("host", "0.0.0.0")
+    host = args.host or server_cfg.get("host", "127.0.0.1")
     port = args.port or int(server_cfg.get("port", 5000))
+    validate_bind_security(host)
 
     import logging
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")

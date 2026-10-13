@@ -282,14 +282,23 @@ def handle_message(
     elif intent == "order_status":
         order_id = _find_order_id(message_text or "")
         if order_id:
-            info = business_ops.get_order_status(order_id)
-            reply = _lang.t(
-                "order_status", lang,
-                default="Order #{{order_id}}: {{status}}",
-                order_id=info["order_id"],
-                status=info["status"],
-                details=f"Estimated delivery: {info.get('estimated_delivery', 'N/A')}",
-            )
+            info = business_ops.get_order_status(order_id, requester_phone=sender)
+            if not info.get("found"):
+                reply = _lang.t(
+                    "order_not_found", lang,
+                    default="I couldn't find order #{{order_id}} for this number. "
+                            "Please check the order number.",
+                    order_id=info["order_id"],
+                )
+            else:
+                reply = _lang.t(
+                    "order_status", lang,
+                    default="Order #{{order_id}}: {{status}}",
+                    order_id=info["order_id"],
+                    status=info["status"],
+                    details="Estimated delivery: "
+                            f"{info.get('estimated_delivery', 'N/A')}",
+                )
         else:
             reply = _lang.t(
                 "need_more_info", lang,

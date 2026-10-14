@@ -55,14 +55,15 @@ bash bootusb/flash-usb.sh openclaw-autoinstall.iso /dev/sdX
 ## 装完之后怎么用
 
 - 服务地址：`http://<机器IP>:5000`，接口用法见项目根 `README` / `DEV_LOG`（`/health`、`/chat`、`/v1/chat/completions` 等）。
-- **默认账号 `openclaw` / 默认密码 `openclaw` —— 请立刻改：** `passwd`。
+- **登录账号 `openclaw`，初始密码是每台机器随机生成的**，显示在本机控制台登录界面上，首次登录（含 SSH）会强制改密。
+- API key 在 `/etc/openclaw/openclaw.env`（`sudo cat` 查看），调用接口时带 `Authorization: Bearer <OPENCLAW_API_KEY>`。
 - 首次开机进度日志：`/var/log/openclaw-firstboot.log`（`journalctl -u openclaw-firstboot -f` 也行）。
 - 服务管理：`systemctl status openclaw`、`systemctl restart openclaw`。
 - 配置文件：`/opt/openclaw/config/agent_llm_config.json`（改模型/端口后 `systemctl restart openclaw`）。
 
 ## 定制
 
-- **改默认密码**：`openssl passwd -6` 生成新哈希，替换 `bootusb/autoinstall/user-data` 里 `identity.password`，重新构建 ISO。
+- **安装期占位密码**：`user-data` 里的 `identity.password` 只在安装过程中存在，装完会被 `init-credentials.sh` 替换成随机密码，一般不需要改。
 - **固定端口/模型**：改 `user-data` 让首次开机传参，或装完后改 `config/agent_llm_config.json`。
 - **离线部署（不联网拉模型）**：本盘默认走联网下载。若要完全离线，需要把模型预置进镜像（体积会涨到几十 G），可另行扩展 `firstboot.sh` 从盘内拷贝 blob——需要时告诉我。
 

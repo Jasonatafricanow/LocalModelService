@@ -7,8 +7,9 @@
 #         启用“首次开机”服务（重启后自动装驱动/Ollama/模型并起服务）。
 #
 # ⚠️  storage 段会“清空目标机最大的那块硬盘”，属于破坏性操作。
-# ⚠️  默认账号 openclaw / 密码 openclaw —— 部署后请立刻改密码！
-#      改密码哈希： openssl passwd -6   或   mkpasswd -m sha-512
+# 🔐 下面的 openclaw/openclaw 只在安装过程中存在：late-commands 会把它换成
+#    每台机器独立的随机密码（显示在本机控制台登录界面，首次登录强制改密），
+#    并生成 OPENCLAW_API_KEY 到 /etc/openclaw/openclaw.env。
 # ============================================================================
 autoinstall:
   version: 1
@@ -39,7 +40,7 @@ autoinstall:
     hostname: openclaw
     realname: OpenClaw Appliance
     username: openclaw
-    # 密码明文为 "openclaw"（SHA-512）。务必部署后修改。
+    # 密码明文为 "openclaw"（SHA-512），仅安装期占位，装完即被 init-credentials.sh 替换。
     password: "$6$eNtsghr59wk6bekB$R/z0zp1YjgRFIw98edSwNFmexin.TkGtuogtUGmcNS07QYVQ06JUISE3XHKERhh5hAbdp1EaT2N2FCbZhbgFP0"
 
   # 系统装好后要用到的基础包（Ollama / 模型走首次开机联网安装）
@@ -62,4 +63,7 @@ autoinstall:
     - cp /target/opt/openclaw/bootusb/firstboot/openclaw-firstboot.service /target/etc/systemd/system/
     - cp /target/opt/openclaw/bootusb/firstboot/openclaw.service /target/etc/systemd/system/
     - chmod +x /target/opt/openclaw/bootusb/firstboot/firstboot.sh
+    # 3) 替换公开默认密码、生成 API key（见 init-credentials.sh）
+    - chmod +x /target/opt/openclaw/bootusb/firstboot/init-credentials.sh
+    - curtin in-target --target=/target -- /opt/openclaw/bootusb/firstboot/init-credentials.sh
     - curtin in-target --target=/target -- systemctl enable openclaw-firstboot.service

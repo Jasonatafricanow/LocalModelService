@@ -35,6 +35,11 @@ config/agent_llm_config.json
 # System
 *.pid
 
+# Local conversation history
+data/
+*.sqlite3
+*.sqlite3-journal
+
 # AI Agent / Dev Harness tools
 .claude/
 .hermes/

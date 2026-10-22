@@ -1,6 +1,8 @@
 import asyncio
 import json
 import logging
+import os
+from pathlib import Path
 import time
 import uuid
 
@@ -21,7 +23,12 @@ from src.tools.registry import registry
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-memory = ConversationMemory()
+memory = ConversationMemory(
+    os.getenv("OPENCLAW_MEMORY_DB", str(Path(__file__).resolve().parents[2] / "data" / "conversations.sqlite3")),
+    ttl_seconds=int(os.getenv("OPENCLAW_MEMORY_TTL_SECONDS", "2592000")),
+    max_messages=int(os.getenv("OPENCLAW_MEMORY_MAX_MESSAGES", "200")),
+    max_sessions=int(os.getenv("OPENCLAW_MEMORY_MAX_SESSIONS", "100")),
+)
 
 
 @router.get("/health")
@@ -77,8 +84,7 @@ async def chat(
         logger.exception("Chat error")
         raise HTTPException(status_code=500, detail=str(e))
 
-    memory.add_message(principal.owner_id, req.session_id, "user", req.message)
-    memory.add_message(principal.owner_id, req.session_id, "assistant", reply)
+    memory.add_exchange(principal.owner_id, req.session_id, req.message, reply)
 
     return {
         "status": "ok",
@@ -106,14 +112,8 @@ async def chat_stream(
                     + json.dumps({"content": chunk}, ensure_ascii=False)
                     + "\n\n"
                 )
+        memory.add_exchange(principal.owner_id, req.session_id, req.message, full)
         yield "data: [DONE]\n\n"
-
-        memory.add_message(
-            principal.owner_id, req.session_id, "user", req.message
-        )
-        memory.add_message(
-            principal.owner_id, req.session_id, "assistant", full
-        )
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 

@@ -28,7 +28,7 @@ Requires Python 3.10+ and Ollama. Configure bearer authentication before exposin
 python -m pytest tests/ -q
 ```
 
-`/v1/chat/completions` is a **partial OpenAI-style interface**: full message/parameter forwarding, accurate usage and complete streaming metadata remain work. Sessions are currently in memory and do not survive restart. See [implementation details](docs/IMPLEMENTATION.md) and [security hardening history](docs/AUDIT-HISTORY.md).
+`/v1/chat/completions` is a **partial OpenAI-style interface**: full message/parameter forwarding, accurate usage and complete streaming metadata remain work. Native `/chat` and `/chat/stream` sessions persist in SQLite across restarts. Completed turns are saved atomically; default retention is 30 days, 200 messages per session and 100 sessions per authenticated owner. Set `OPENCLAW_MEMORY_DB`, `OPENCLAW_MEMORY_TTL_SECONDS`, `OPENCLAW_MEMORY_MAX_MESSAGES` or `OPENCLAW_MEMORY_MAX_SESSIONS` to override these limits. Expired messages are removed on the next read/write. The default database is `data/conversations.sqlite3` under the installed project; give the service a writable persistent path. API-key rotation changes the owner identity. WhatsApp module state is separate. See [implementation details](docs/IMPLEMENTATION.md) and [security hardening history](docs/AUDIT-HISTORY.md).
 
 Some existing installer/service names contain `OpenClaw` or `OpenClaw-CS`; they are historical names within this repository, not a statement of affiliation with another project.
 

@@ -7,7 +7,7 @@ need to couple directly to a specific local model process.
 The current repository is best read as an infrastructure project, not as a claim of a
 finished omnichannel customer-service platform.
 
-The compatibility limits and in-memory session lifecycle are listed in the [current entry guide](../README.md#api-compatibility-and-verification).
+The compatibility limits and SQLite session retention are listed in the [current entry guide](../README.md#api-compatibility-and-verification).
 
 ## What is implemented
 

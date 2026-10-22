@@ -28,7 +28,7 @@ python src/main.py
 python -m pytest tests/ -q
 ```
 
-`/v1/chat/completions` 是**部分 OpenAI 风格兼容接口**，完整消息及参数透传、准确 usage 和完整流式元数据仍待实现。会话目前保存在内存，重启会丢失。见[实现说明](docs/IMPLEMENTATION.md)和[安全加固历史](docs/AUDIT-HISTORY.md)。
+`/v1/chat/completions` 是**部分 OpenAI 风格兼容接口**，完整消息及参数透传、准确 usage 和完整流式元数据仍待实现。原生 `/chat` 和 `/chat/stream` 会话已改为 SQLite 持久化，重启后保留；完整对话轮次原子写入。默认保留 30 天，每会话最多 200 条消息，每个鉴权所有者最多 100 个会话；过期消息在下次读写时清理。可用 `OPENCLAW_MEMORY_DB`、`OPENCLAW_MEMORY_TTL_SECONDS`、`OPENCLAW_MEMORY_MAX_MESSAGES`、`OPENCLAW_MEMORY_MAX_SESSIONS` 调整。默认数据库为安装项目下的 `data/conversations.sqlite3`，服务需有可写的持久路径。更换 API 密钥会改变所有者身份。WhatsApp 模块状态另行管理。见[实现说明](docs/IMPLEMENTATION.md)和[安全加固历史](docs/AUDIT-HISTORY.md)。
 
 安装脚本和服务名中的 `OpenClaw` / `OpenClaw-CS` 是本仓库历史命名，不表示与其他同名项目存在关联。
 

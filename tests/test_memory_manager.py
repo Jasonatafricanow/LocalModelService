@@ -24,6 +24,7 @@ def test_add_and_get_message():
 def test_get_nonexistent_session():
     cm = ConversationMemory()
     assert cm.get_history(OWNER_A, "nobody") == []
+    assert cm.list_sessions(OWNER_A) == []
 
 
 def test_history_truncation():
@@ -79,3 +80,34 @@ def test_list_sessions_is_owner_scoped():
 
     assert set(cm.list_sessions(OWNER_A)) == {"s1", "s2"}
     assert cm.list_sessions(OWNER_B) == ["other"]
+
+
+def test_restart_retains_owner_scoped_turns_and_deletions(tmp_path):
+    path = str(tmp_path / "history.sqlite3")
+    first = ConversationMemory(path)
+    first.add_exchange(OWNER_A, "same", "question", "answer")
+    first.add_message(OWNER_B, "same", "user", "private")
+    first.close()
+    second = ConversationMemory(path)
+    assert second.get_history(OWNER_A, "same") == [
+        {"role": "user", "content": "question"}, {"role": "assistant", "content": "answer"}]
+    second.clear(OWNER_A, "same")
+    second.close()
+    third = ConversationMemory(path)
+    assert third.get_history(OWNER_A, "same") == []
+    assert third.get_history(OWNER_B, "same")[0]["content"] == "private"
+    third.close()
+
+
+def test_retention_bounds_messages_sessions_and_expires_at_ttl():
+    now = [100.0]
+    cm = ConversationMemory(ttl_seconds=10, max_messages=2, max_sessions=1, clock=lambda: now[0])
+    cm.add_message(OWNER_A, "old", "user", "old")
+    for content in ["1", "2", "3"]:
+        cm.add_message(OWNER_A, "new", "user", content)
+    assert cm.list_sessions(OWNER_A) == ["new"]
+    assert [m["content"] for m in cm.get_history(OWNER_A, "new")] == ["2", "3"]
+    assert cm.get_history(OWNER_A, "new", max_history=0) == []
+    now[0] = 110.0
+    assert cm.list_sessions(OWNER_A) == []
+    assert cm.get_history(OWNER_A, "new") == []

@@ -3,7 +3,7 @@ import asyncio
 
 import httpx
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from src.api import openai_proxy, routes
@@ -91,7 +91,8 @@ def test_unavailable_upstream_returns_502(client, monkeypatch):
     assert response.status_code == 502
 
 
-def test_closing_partial_stream_releases_upstream_and_inference_slot(monkeypatch):
+@pytest.mark.parametrize("close_error", [False, True])
+def test_closing_partial_stream_releases_upstream_and_inference_slot(monkeypatch, close_error):
     closed = []
 
     class Stream(httpx.AsyncByteStream):
@@ -101,6 +102,8 @@ def test_closing_partial_stream_releases_upstream_and_inference_slot(monkeypatch
 
         async def aclose(self):
             closed.append(True)
+            if close_error:
+                raise RuntimeError("transport close failed")
 
     async def scenario():
         queue = InferenceQueue(max_waiting=0)
@@ -109,9 +112,13 @@ def test_closing_partial_stream_releases_upstream_and_inference_slot(monkeypatch
         response = await openai_proxy.forward_chat({
             "messages": [{"role": "user", "content": "hi"}], "stream": True})
         assert await anext(response.body_iterator) == b'data: {"content":"first"}\n\n'
-        with pytest.raises(Exception, match="full"):
+        with pytest.raises(HTTPException, match="full"):
             await queue.acquire()
-        await response.body_iterator.aclose()
+        if close_error:
+            with pytest.raises(RuntimeError, match="transport close failed"):
+                await response.body_iterator.aclose()
+        else:
+            await response.body_iterator.aclose()
         assert closed
         (await queue.acquire())()
     asyncio.run(scenario())

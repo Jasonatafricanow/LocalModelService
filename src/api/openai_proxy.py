@@ -16,19 +16,31 @@ async def forward_chat(payload: dict):
     payload.setdefault("model", config.get("model", "qwen2.5"))
     url = config.get("base_url", "http://localhost:11434").rstrip("/") + "/v1/chat/completions"
     release = await inference_queue.acquire()
-    client = httpx.AsyncClient(timeout=httpx.Timeout(120, connect=5), trust_env=False)
+    client = None
+    upstream = None
+
+    async def close():
+        try:
+            if upstream is not None:
+                await upstream.aclose()
+        finally:
+            try:
+                if client is not None:
+                    await client.aclose()
+            finally:
+                release()
+
     try:
+        client = httpx.AsyncClient(timeout=httpx.Timeout(120, connect=5), trust_env=False)
         # Client credentials authenticate this service only; never forward them upstream.
         request = client.build_request("POST", url, json=payload, headers={"Accept-Encoding": "identity"})
         upstream = await client.send(request, stream=True)
     except httpx.HTTPError as exc:
-        await client.aclose()
-        release()
+        await close()
         logger.warning("Ollama connection failed: %s", type(exc).__name__)
         raise HTTPException(status_code=502, detail="Local model server unavailable") from exc
     except BaseException:
-        await client.aclose()
-        release()
+        await close()
         raise
 
     if not payload.get("stream") or upstream.is_error:
@@ -39,22 +51,14 @@ async def forward_chat(payload: dict):
         except httpx.HTTPError as exc:
             raise HTTPException(status_code=502, detail="Local model response interrupted") from exc
         finally:
-            await upstream.aclose()
-            await client.aclose()
-            release()
+            await close()
 
     async def generate():
         try:
             async for chunk in upstream.aiter_bytes():
                 yield chunk
         finally:
-            try:
-                await upstream.aclose()
-            finally:
-                try:
-                    await client.aclose()
-                finally:
-                    release()
+            await close()
 
     return StreamingResponse(generate(), status_code=upstream.status_code,
                              media_type="text/event-stream", headers={"Cache-Control": "no-cache"})

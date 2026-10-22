@@ -24,7 +24,7 @@ class InferenceQueue:
             self._waiting += 1
             try:
                 await asyncio.wait_for(self._slots.acquire(), self._timeout)
-            except TimeoutError as exc:
+            except asyncio.TimeoutError as exc:
                 raise HTTPException(503, "Inference queue timed out", headers={"Retry-After": "3"}) from exc
             finally:
                 self._waiting -= 1

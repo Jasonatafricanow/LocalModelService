@@ -24,6 +24,12 @@ if command -v python3 &>/dev/null; then
     }
 fi
 
+# Validate before the legacy installer performs any side effects.
+if [[ ! "$PORT" =~ ^[0-9]{1,5}$ ]] || (( 10#$PORT < 1 || 10#$PORT > 65535 )); then
+    echo "Invalid port: expected an integer from 1 to 65535" >&2
+    exit 2
+fi
+
 # ── Legacy bash fallback ──
 echo "Python 3.10+ 未安装 — 使用 legacy bash 安装流程"
 echo ""
@@ -49,15 +55,20 @@ fi
 
 step 4 4 "写入配置"
 cd "$SCRIPT_DIR"
-python3 -c "
+python3 - "$MODEL" "$PORT" <<'PYCONFIG'
 import json
-with open('config/agent_llm_config.json') as f:
-    cfg = json.load(f)
-cfg['llm']['model'] = '$MODEL'
-cfg['server']['port'] = $PORT
-with open('config/agent_llm_config.json', 'w') as f:
-    json.dump(cfg, f, indent=4, ensure_ascii=False)
-"
+import sys
+from pathlib import Path
+model, port = sys.argv[1:]
+port = int(port)
+if not 1 <= port <= 65535:
+    raise ValueError('Invalid port')
+path = Path('config/agent_llm_config.json')
+cfg = json.loads(path.read_text(encoding='utf-8'))
+cfg['llm']['model'] = model
+cfg['server']['port'] = port
+path.write_text(json.dumps(cfg, indent=4, ensure_ascii=False), encoding='utf-8')
+PYCONFIG
 
 echo ""
 echo "========================================"

@@ -26,12 +26,14 @@ echo "$USER_NAME:$password" | chpasswd
 chage -d 0 "$USER_NAME"   # 首次登录（含 SSH）强制改密
 
 install -d -m 755 /etc/issue.d
+# agetty reads the banner as root. Restrict it before writing the password,
+# including when a previous installation left a world-readable file.
+install -m 600 /dev/null "$ISSUE_FILE"
 cat > "$ISSUE_FILE" <<EOF
 OpenClaw initial login: $USER_NAME / $password
 (You must change it at first login. API key: sudo cat $ENV_FILE)
 
 EOF
-chmod 644 "$ISSUE_FILE"
 
 install -d -m 700 "$ENV_DIR"
 if [ ! -s "$ENV_FILE" ]; then

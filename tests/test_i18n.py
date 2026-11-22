@@ -160,12 +160,9 @@ class TestLanguageSwitch:
     def test_no_switch_en_greeting(self):
         assert _manager.is_language_switch("Hello, how are you?") == (False, "")
 
-    def test_no_switch_english_in_question(self):
-        """'Do you have this in English?' is effectively a switch."""
-        # Actually this SHOULD trigger because 'in English' matches
-        result, lang = _manager.is_language_switch("Do you have this in English?")
-        # This is a questionable case — let's accept either outcome
-        # since the phrase genuinely expresses language preference.
+    def test_switch_english_in_question(self):
+        """An explicit request for English changes the session language."""
+        assert _manager.is_language_switch("Do you have this in English?") == (True, "en")
 
     def test_no_switch_order_query(self):
         assert _manager.is_language_switch("Quero saber meu pedido") == (False, "")

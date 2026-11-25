@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ChatRequest(BaseModel):
@@ -14,14 +14,16 @@ class ChatResponse(BaseModel):
 
 
 class ChatCompletionMessage(BaseModel):
+    model_config = ConfigDict(extra="allow")
     role: str = "user"
-    content: str
+    content: str | list[dict] | None = None
 
 
 class ChatCompletionRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
     model: str = Field(default="qwen2.5", description="模型名称")
     messages: list[ChatCompletionMessage] = Field(
-        ..., description="消息列表"
+        ..., min_length=1, description="消息列表"
     )
     stream: bool = Field(default=False, description="是否流式输出")
     temperature: float | None = None

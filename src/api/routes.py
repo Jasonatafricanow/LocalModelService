@@ -1,8 +1,8 @@
 import asyncio
 import json
 import logging
-import time
-import uuid
+import os
+from pathlib import Path
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -14,6 +14,8 @@ from src.api.auth import (
     require_api_principal,
     require_tools_principal,
 )
+from src.api.openai_proxy import forward_chat
+from src.api.inference_queue import inference_queue
 from src.api.schemas import ChatCompletionRequest, ChatRequest, ToolInvokeRequest
 from src.core.config import get_llm_config
 from src.memory.manager import ConversationMemory
@@ -21,7 +23,12 @@ from src.tools.registry import registry
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-memory = ConversationMemory()
+memory = ConversationMemory(
+    os.getenv("OPENCLAW_MEMORY_DB", str(Path(__file__).resolve().parents[2] / "data" / "conversations.sqlite3")),
+    ttl_seconds=int(os.getenv("OPENCLAW_MEMORY_TTL_SECONDS", "2592000")),
+    max_messages=int(os.getenv("OPENCLAW_MEMORY_MAX_MESSAGES", "200")),
+    max_sessions=int(os.getenv("OPENCLAW_MEMORY_MAX_SESSIONS", "100")),
+)
 
 
 @router.get("/health")
@@ -70,15 +77,16 @@ async def chat(
     principal: ApiPrincipal = Depends(require_api_principal),
 ):
     agent = get_agent()
-    history = memory.get_history(principal.owner_id, req.session_id)
+    release = await inference_queue.acquire()
     try:
+        history = memory.get_history(principal.owner_id, req.session_id)
         reply = await agent.achat(req.message, history)
+        memory.add_exchange(principal.owner_id, req.session_id, req.message, reply)
     except Exception as e:
         logger.exception("Chat error")
         raise HTTPException(status_code=500, detail=str(e))
-
-    memory.add_message(principal.owner_id, req.session_id, "user", req.message)
-    memory.add_message(principal.owner_id, req.session_id, "assistant", reply)
+    finally:
+        release()
 
     return {
         "status": "ok",
@@ -94,26 +102,24 @@ async def chat_stream(
     principal: ApiPrincipal = Depends(require_api_principal),
 ):
     agent = get_agent()
-    history = memory.get_history(principal.owner_id, req.session_id)
+    release = await inference_queue.acquire()
 
     async def generate():
-        full = ""
-        async for chunk in agent.astream(req.message, history):
-            if chunk:
-                full += chunk
-                yield (
-                    "data: "
-                    + json.dumps({"content": chunk}, ensure_ascii=False)
-                    + "\n\n"
-                )
-        yield "data: [DONE]\n\n"
-
-        memory.add_message(
-            principal.owner_id, req.session_id, "user", req.message
-        )
-        memory.add_message(
-            principal.owner_id, req.session_id, "assistant", full
-        )
+        try:
+            history = memory.get_history(principal.owner_id, req.session_id)
+            full = ""
+            async for chunk in agent.astream(req.message, history):
+                if chunk:
+                    full += chunk
+                    yield (
+                        "data: "
+                        + json.dumps({"content": chunk}, ensure_ascii=False)
+                        + "\n\n"
+                    )
+            memory.add_exchange(principal.owner_id, req.session_id, req.message, full)
+            yield "data: [DONE]\n\n"
+        finally:
+            release()
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -123,56 +129,7 @@ async def chat_completions(
     req: ChatCompletionRequest,
     _principal: ApiPrincipal = Depends(require_api_principal),
 ):
-    agent = get_agent()
-
-    user_msg = ""
-    for m in reversed(req.messages):
-        if m.role == "user":
-            user_msg = m.content
-            break
-
-    history = []
-    for m in req.messages[:-1]:
-        if m.role in ("user", "assistant"):
-            history.append({"role": m.role, "content": m.content})
-
-    if req.stream:
-        async def generate():
-            async for chunk in agent.astream(user_msg, history):
-                if chunk:
-                    payload = {
-                        "choices": [
-                            {"delta": {"content": chunk}, "index": 0}
-                        ]
-                    }
-                    yield (
-                        "data: "
-                        + json.dumps(payload, ensure_ascii=False)
-                        + "\n\n"
-                    )
-            yield "data: [DONE]\n\n"
-
-        return StreamingResponse(generate(), media_type="text/event-stream")
-
-    reply = await agent.achat(user_msg, history)
-    return {
-        "id": f"chatcmpl-{uuid.uuid4().hex[:12]}",
-        "object": "chat.completion",
-        "model": req.model,
-        "choices": [
-            {
-                "index": 0,
-                "message": {"role": "assistant", "content": reply},
-                "finish_reason": "stop",
-            }
-        ],
-        "usage": {
-            "prompt_tokens": 0,
-            "completion_tokens": 0,
-            "total_tokens": 0,
-        },
-        "created": int(time.time()),
-    }
+    return await forward_chat(req.model_dump(exclude_unset=True))
 
 
 @router.get("/tools")
